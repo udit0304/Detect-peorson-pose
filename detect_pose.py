@@ -2,11 +2,10 @@ import os
 import numpy as np
 import glob
 import openpifpaf
-import cv2
 import PIL
 import torch
 import matplotlib.pyplot as plt
-from math import sqrt, acos, degrees, atan, degrees
+from math import sqrt, acos
 
 
 def angle_gor(a, b, c, d):
@@ -62,6 +61,7 @@ def get_pose(image, net, device):
         data, batch_size=1, pin_memory=True,
         collate_fn=openpifpaf.datasets.collate_images_anns_meta)
     for images_batch, _, __ in loader:
+        # get body joints in the image
         predictions = processor.batch(net, images_batch, device=device)[0]
         for pred in predictions:
             pred_json = pred.json_data()
@@ -71,10 +71,12 @@ def get_pose(image, net, device):
             kps = np.reshape(kps, (-1, 3))
             s = 0
             s1 = 0
+            # if lower body part is occluded the person is detected as sitting
             if (kps[11][:2] == [0, 0]).all() or (kps[12][:2] == [0, 0]).all() or (kps[13][:2] == [0, 0]).all() or (kps[14][:2] == [0, 0]).all() or (kps[15][:2] == [0, 0]).all() or (kps[16][:2] == [0, 0]).all():
                 s += 1
                 s1 += 1
             else:
+                # check the distance and of joints in lower body part
                 s += sit_rec(kps[12][:2], kps[14][:2], kps[14][:2],
                              kps[16][:2])
                 s += sit_rec(kps[11][:2], kps[13][:2], kps[13][:2],
@@ -101,17 +103,13 @@ def main():
     for image in images:
         sitting_c, standing_c = get_pose(image, net, device)
         sitting_inframe[int(os.path.basename(image).replace(".jpg", "").split("_")[1])] = sitting_c
-    # print(sitting_inframe)
     fig = plt.figure()
-    ax = fig.add_axes([0, 0, 1, 1])
     frame_num = np.arange(len(sitting_inframe))
-    ax.bar(frame_num, sitting_inframe)
-    ax.set_ylabel('Count')
-    ax.set_title('Number of persons sitting')
-    # ax.set_xticks(frame_num)
-    # ax.set_yticks(np.arange(0, 10, 2))
-    # plt.show()
-    plt.savefig("fig.jpg")
+    plt.bar(frame_num, sitting_inframe)
+    plt.ylabel('Count')
+    plt.xlabel("Frame number")
+    plt.title('Number of persons sitting')
+    plt.savefig("plot.jpg")
 
 
 if __name__ == "__main__":
